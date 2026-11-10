@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Calendario</title>
+<meta name="theme-color" content="#F6F4F0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Calendario">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<style>
+  :root{
+    --bg:#F6F4F0; --card:#FFFFFF; --line:#E6E1D8; --ink:#25221E; --muted:#8A8378;
+    --accent:#2F4B7C; --danger:#C1121F; --radius:14px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,'Segoe UI',Roboto,sans-serif}
+  button{font-family:inherit;color:inherit;cursor:pointer}
+  input,select{font-family:inherit;font-size:16px;color:var(--ink)}
+  .hidden{display:none!important}
+
+  header{position:sticky;top:0;z-index:5;background:var(--bg);padding:calc(10px + env(safe-area-inset-top)) calc(10px + env(safe-area-inset-right)) 6px calc(10px + env(safe-area-inset-left))}
+  .bar1{display:flex;align-items:center;gap:6px}
+  .bar1 h1{flex:1;margin:0;font-size:21px;font-weight:700;text-transform:capitalize;letter-spacing:-.3px;text-align:center}
+  .icon{width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:var(--card);font-size:22px;line-height:1;display:grid;place-items:center;padding:0 0 3px}
+  .pill{height:34px;padding:0 14px;border-radius:17px;border:1px solid var(--line);background:var(--card);font-weight:600;font-size:14px}
+  .bar2{display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap}
+  .tool{height:34px;padding:0 12px;border-radius:10px;border:1px solid var(--line);background:var(--card);font-size:14px;font-weight:500}
+  .tool.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .status{margin-left:auto;font-size:12px;color:var(--muted);white-space:nowrap}
+  .status.warn{color:#B05A12}
+  .brushbar{margin-top:8px;display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;color:#fff;font-size:13.5px;font-weight:500}
+  .brushbar span{flex:1}
+  .brushbar button{border:0;background:rgba(255,255,255,.25);color:#fff;border-radius:8px;padding:6px 12px;font-weight:600;font-size:13px}
+
+  main{padding:0 10px 40px;max-width:1200px;margin:0 auto}
+  .dow{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin:4px 0 3px}
+  .dow div{text-align:center;font-size:11.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+  .grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;touch-action:pan-y}
+  .cell{position:relative;background:var(--card);border-radius:8px;min-height:clamp(74px,12.5vh,140px);padding:3px 3px 2px;display:flex;flex-direction:column;overflow:hidden;border:1px solid transparent}
+  .cell.out{opacity:.38}
+  .cell.today{border-color:var(--ink)}
+  .num{font-size:12.5px;font-weight:600;line-height:1;padding:2px 3px 3px;align-self:flex-start;border-radius:10px}
+  .cell.today .num{background:var(--ink);color:#fff;padding:3px 6px}
+  .evs{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .chip{color:#fff;border-radius:4px;padding:1px 3px;font-size:9.5px;line-height:1.3;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .more{font-size:9.5px;color:var(--muted);font-weight:600;padding-left:2px}
+  .rot{margin-top:auto;text-align:right;font-size:8.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:2px 1px 0;letter-spacing:.1px}
+  @media (min-width:700px){
+    header{padding:calc(14px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) 8px calc(16px + env(safe-area-inset-left))} main{padding:0 calc(16px + env(safe-area-inset-right)) calc(50px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left))}
+    .grid,.dow{gap:5px}
+    .cell{padding:5px 5px 4px;border-radius:10px}
+    .num{font-size:14px}
+    .chip{font-size:12px;padding:2px 5px;border-radius:5px}
+    .more{font-size:11.5px}
+    .rot{font-size:11px}
+    .bar1 h1{font-size:26px}
+  }
+
+  .upcoming{margin-top:22px;background:var(--card);border-radius:var(--radius);padding:14px 14px 6px}
+  .upcoming h2{margin:0 0 8px;font-size:15px;font-weight:700}
+  .uprow{display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--line);align-items:flex-start}
+  .uprow:first-of-type{border-top:0}
+  .update{width:62px;flex:none;font-size:12.5px;font-weight:600;color:var(--muted);padding-top:2px;text-transform:capitalize}
+  .update.hoy{color:var(--ink)}
+  .upevs{flex:1;display:flex;flex-direction:column;gap:4px;min-width:0}
+  .upev{font-size:14px;display:flex;gap:6px;align-items:baseline}
+  .dot{width:8px;height:8px;border-radius:50%;flex:none;transform:translateY(-1px)}
+  .upev .t{color:var(--muted);font-size:12.5px;margin-left:auto;white-space:nowrap}
+  .empty{color:var(--muted);font-size:14px;padding:6px 0 12px}
+
+  .overlay{position:fixed;inset:0;background:rgba(30,26,22,.35);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+  .sheet{background:var(--card);width:100%;max-width:560px;max-height:88vh;overflow:auto;border-radius:20px 20px 0 0;padding:16px 16px calc(28px + env(safe-area-inset-bottom));box-shadow:0 -8px 30px rgba(0,0,0,.12);-webkit-overflow-scrolling:touch}
+  @media (min-width:700px){.overlay{align-items:center}.sheet{border-radius:20px;max-height:84vh}}
+  .shead{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+  .shead h3{flex:1;margin:0;font-size:19px;font-weight:700}
+  .close{border:0;background:var(--bg);width:34px;height:34px;border-radius:50%;font-size:18px}
+  .sub{font-size:13px;color:var(--muted);margin:0 0 12px}
+  .rotpill{display:inline-block;font-size:12.5px;font-weight:700;padding:4px 10px;border-radius:12px;margin-bottom:12px}
+  .lbl{font-size:12.5px;font-weight:600;color:var(--muted);margin:14px 0 6px;text-transform:uppercase;letter-spacing:.4px}
+  .row{display:flex;align-items:center;gap:8px;padding:9px 0;border-top:1px solid var(--line)}
+  .row:first-child{border-top:0}
+  .row .main{flex:1;min-width:0}
+  .row .main b{font-weight:600}
+  .row .main small{display:block;color:var(--muted);font-size:12.5px}
+  .mini{border:1px solid var(--line);background:var(--card);border-radius:8px;height:32px;padding:0 10px;font-size:13px;font-weight:500;white-space:nowrap}
+  .mini.danger{color:var(--danger)}
+  .mini.confirm{background:var(--danger);color:#fff;border-color:var(--danger)}
+  .types{display:flex;flex-wrap:wrap;gap:6px}
+  .tpill{border:1.5px solid var(--line);background:var(--card);border-radius:18px;height:36px;padding:0 12px;font-size:14px;font-weight:500}
+  .tpill.sel{color:#fff}
+  .field{width:100%;height:42px;border:1px solid var(--line);border-radius:10px;padding:0 12px;background:#fff}
+  .two{display:flex;gap:8px}
+  .two > *{flex:1;min-width:0}
+  .primary{width:100%;height:46px;border:0;border-radius:12px;background:var(--ink);color:#fff;font-size:16px;font-weight:600;margin-top:12px}
+  .ghost{width:100%;height:42px;border:1px solid var(--line);border-radius:12px;background:var(--card);font-size:15px;font-weight:500;margin-top:8px}
+  .swatches{display:flex;flex-wrap:wrap;gap:8px}
+  .sw{width:34px;height:34px;border-radius:50%;border:2px solid transparent;padding:0;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
+  .sw.sel{border-color:var(--ink)}
+  .err{color:var(--danger);font-size:13px;margin-top:8px;min-height:1px}
+  .hint{font-size:13px;color:var(--muted);line-height:1.45;margin:6px 0}
+  .trow{display:flex;gap:6px;align-items:center;padding:8px 0;border-top:1px solid var(--line);flex-wrap:wrap}
+  .trow:first-child{border-top:0}
+  .trow .emo{width:52px;text-align:center;height:38px;border:1px solid var(--line);border-radius:8px}
+  .trow .nm{flex:1;min-width:120px;height:38px;border:1px solid var(--line);border-radius:8px;padding:0 10px}
+  .trow .swatches{width:100%;gap:6px}
+  .trow .sw{width:26px;height:26px}
+  .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:12px;font-size:14px;z-index:40;max-width:90vw;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.2)}
+  textarea.dump{width:100%;height:120px;font-size:12px;border:1px solid var(--line);border-radius:8px;padding:8px;font-family:ui-monospace,monospace}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar1">
+    <button id="prev" class="icon" aria-label="Mes anterior">‹</button>
+    <h1 id="mlabel"></h1>
+    <button id="next" class="icon" aria-label="Mes siguiente">›</button>
+    <button id="todayBtn" class="pill">Hoy</button>
+  </div>
+  <div class="bar2">
+    <button id="bRot" class="tool">🎨 Rotaciones</button>
+    <button id="bBrush" class="tool">🖌️ Pincel</button>
+    <button id="bMore" class="tool">⚙️ Más</button>
+    <span id="status" class="status"></span>
+  </div>
+  <div id="brushBar" class="brushbar hidden"></div>
+</header>
+<main>
+  <div class="dow"><div>Lun</div><div>Mar</div><div>Mié</div><div>Jue</div><div>Vie</div><div>Sáb</div><div>Dom</div></div>
+  <div id="grid" class="grid"></div>
+  <section class="upcoming">
+    <h2>Próximos 14 días</h2>
+    <div id="up"></div>
+  </section>
+</main>
+<div id="overlay" class="overlay hidden"><div class="sheet" id="sheet"></div></div>
+<div id="toast" class="toast hidden"></div>
+
+<script>
+(function(){
+'use strict';
+const MESES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const MES_C=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+const DIA_L=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+const DIA_C=['dom','lun','mar','mié','jue','vie','sáb'];
+const ROT_COLORS=[
+  {bg:'#FBDDE2',fg:'#A23B53'},{bg:'#FFE3C7',fg:'#A9530C'},{bg:'#FFF0B0',fg:'#7E6300'},
+  {bg:'#DAF0D3',fg:'#367129'},{bg:'#CFEBF3',fg:'#1D6880'},{bg:'#DAE3FA',fg:'#34509F'},
+  {bg:'#E5DBF7',fg:'#5F3BA0'},{bg:'#F4D7EC',fg:'#933479'},{bg:'#E8E2D4',fg:'#665940'},
+  {bg:'#D7EAE3',fg:'#356B5B'},{bg:'#FFD6CC',fg:'#AA3519'},{bg:'#E3E3E3',fg:'#4E4E4E'}
+];
+const EV_COLORS=['#3D5A80','#C1121F','#E76F51','#7B2CBF','#2A9D8F','#6C757D','#C99700','#D9488B','#264653','#0077B6','#8D6E63','#2D6A4F'];
+const DEFAULT_TYPES=[
+  {id:'turno',name:'Turno',emoji:'🌙',color:'#3D5A80'},
+  {id:'certamen',name:'Certamen',emoji:'📝',color:'#C1121F'},
+  {id:'test',name:'Test',emoji:'✏️',color:'#E76F51'},
+  {id:'prueba',name:'Prueba',emoji:'📋',color:'#7B2CBF'},
+  {id:'practica',name:'Práctica',emoji:'🏥',color:'#2A9D8F'},
+  {id:'otro',name:'Otro',emoji:'📌',color:'#6C757D'}
+];
+const LS='calInternado.v1';
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const pad=n=>String(n).padStart(2,'0');
+const ymd=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const parse=s=>{const [y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d);};
+const addDays=(d,n)=>new Date(d.getFullYear(),d.getMonth(),d.getDate()+n);
+const fmtShort=s=>{const d=parse(s);return d.getDate()+' '+MES_C[d.getMonth()];};
+
+/* ---------- state ---------- */
+let state={rotations:[],types:null,months:{}};
+try{
+  const s=JSON.parse(localStorage.getItem(LS)||'null');
+  if(s&&typeof s==='object'){
+    state.rotations=Array.isArray(s.rotations)?s.rotations:[];
+    state.types=Array.isArray(s.types)&&s.types.length?s.types:null;
+    state.months=s.months&&typeof s.months==='object'?s.months:{};
+  }
+}catch(e){}
+function saveLocal(){try{localStorage.setItem(LS,JSON.stringify(state));storageOk=true;}catch(e){storageOk=false;}}
+const getTypes=()=>state.types||DEFAULT_TYPES;
+const typeOf=id=>getTypes().find(t=>t.id===id)||{id:'?',name:'Evento',emoji:'•',color:'#6C757D'};
+
+const now=new Date();
+let viewY=now.getFullYear(), viewM=now.getMonth();
+let brushType=null;
+let lastType=null;
+
+function monthEvents(mk){const m=state.months[mk];return m&&m.events?m.events:{};}
+function eventsOn(ds){
+  return Object.values(monthEvents(ds.slice(0,7))).filter(e=>e&&e.date===ds)
+    .sort((a,b)=>(a.time||'').localeCompare(b.time||'')||String(a.id).localeCompare(String(b.id)));
+}
+function rotationOn(ds){
+  let best=null;
+  for(const r of state.rotations){ if(r.start<=ds&&ds<=r.end){ if(!best||r.start>=best.start) best=r; } }
+  return best;
+}
+function ensureMonth(mk){ if(!state.months[mk]||!state.months[mk].events) state.months[mk]={events:{}}; return state.months[mk].events; }
+
+/* ---------- guardado en el dispositivo ---------- */
+let storageOk=true;
+const BK='calInternado.ultimoRespaldo';
+function commit(){ saveLocal(); render(); setStatus(); }
+function setStatus(){
+  const el=$('#status');
+  el.textContent=storageOk?'✓ Guardado en este dispositivo':'⚠️ No se pudo guardar';
+  el.classList.toggle('warn',!storageOk);
+}
+function lastBackup(){ try{return localStorage.getItem(BK);}catch(e){return null;} }
+
+/* ---------- calendar render ---------- */
+function render(){
+  $('#mlabel').textContent=MESES[viewM]+' '+viewY;
+  const first=new Date(viewY,viewM,1);
+  const offset=(first.getDay()+6)%7;
+  const start=addDays(first,-offset);
+  const lastDay=new Date(viewY,viewM+1,0);
+  const totalCells=Math.ceil((offset+lastDay.getDate())/7)*7;
+  const todayS=ymd(new Date());
+  const maxChips=window.innerWidth<700?3:5;
+  let h='';
+  for(let i=0;i<totalCells;i++){
+    const d=addDays(start,i), ds=ymd(d);
+    const rot=rotationOn(ds);
+    const evs=eventsOn(ds);
+    const cls=['cell']; if(d.getMonth()!==viewM) cls.push('out'); if(ds===todayS) cls.push('today');
+    let chips='';
+    evs.slice(0,evs.length>maxChips?maxChips-1:maxChips).forEach(e=>{
+      const t=typeOf(e.type);
+      const label=(e.text||t.name)+(e.time?' '+e.time:'');
+      chips+=`<div class="chip" style="background:${esc(t.color)}">${esc(t.emoji)} ${esc(label)}</div>`;
+    });
+    if(evs.length>maxChips) chips+=`<div class="more">+${evs.length-(maxChips-1)} más</div>`;
+    h+=`<div class="${cls.join(' ')}" data-d="${ds}" style="${rot?'background:'+esc(rot.bg):''}">
+      <div class="num">${d.getDate()}</div><div class="evs">${chips}</div>
+      ${rot?`<div class="rot" style="color:${esc(rot.fg)}">${esc(rot.name)}</div>`:''}
+    </div>`;
+  }
+  $('#grid').innerHTML=h;
+  renderUpcoming();
+}
+function renderUpcoming(){
+  const t0=new Date(); let h='';
+  for(let i=0;i<14;i++){
+    const d=addDays(t0,i), ds=ymd(d), evs=eventsOn(ds);
+    if(!evs.length) continue;
+    const lab=i===0?'hoy':i===1?'mañana':DIA_C[d.getDay()]+' '+d.getDate();
+    h+=`<div class="uprow" data-d="${ds}"><div class="update ${i===0?'hoy':''}">${lab}</div><div class="upevs">`+
+      evs.map(e=>{const t=typeOf(e.type);return `<div class="upev"><span class="dot" style="background:${esc(t.color)}"></span><span>${esc(t.emoji)} ${esc(e.text||t.name)}</span>${e.time?`<span class="t">${esc(e.time)}</span>`:''}</div>`;}).join('')+
+      `</div></div>`;
+  }
+  $('#up').innerHTML=h||'<div class="empty">Nada anotado en los próximos 14 días.</div>';
+}
+
+/* ---------- sheets ---------- */
+let sheetKind=null, sheetArg=null, editId=null, armed=null;
+function openSheet(kind,arg){sheetKind=kind;sheetArg=arg;armed=null;$('#overlay').classList.remove('hidden');refreshSheet();}
+function closeSheet(){sheetKind=null;editId=null;armed=null;$('#overlay').classList.add('hidden');}
+function refreshSheet(){
+  if(!sheetKind) return;
+  if(sheetKind==='day') daySheet(sheetArg);
+  else if(sheetKind==='rot') rotSheet();
+  else if(sheetKind==='brush') brushSheet();
+  else if(sheetKind==='more') moreSheet();
+}
+$('#overlay').addEventListener('click',e=>{ if(e.target.id==='overlay') closeSheet(); });
+function head(title){return `<div class="shead"><h3>${title}</h3><button class="close" data-a="close" aria-label="Cerrar">✕</button></div>`;}
+function twoTap(key,btn){
+  if(armed===key) return true;
+  armed=key; btn.textContent='¿Seguro?'; btn.classList.add('confirm');
+  setTimeout(()=>{ if(armed===key){armed=null; refreshSheet();} },3000);
+  return false;
+}
+
+/* day */
+let formType=null;
+function daySheet(ds){
+  const d=parse(ds), rot=rotationOn(ds), evs=eventsOn(ds), types=getTypes();
+  const ed=editId?evs.find(e=>e.id===editId):null;
+  if(!ed&&editId) editId=null;
+  if(!formType||!types.find(t=>t.id===formType)) formType=(lastType&&types.find(t=>t.id===lastType))?lastType:types[0].id;
+  const sel=formType;
+  let h=head(`<span style="text-transform:capitalize">${DIA_L[d.getDay()]}</span> ${d.getDate()} de ${MESES[d.getMonth()]}`);
+  if(rot) h+=`<span class="rotpill" style="background:${esc(rot.bg)};color:${esc(rot.fg)}">${esc(rot.name)}</span>`;
+  if(evs.length){
+    h+=`<div>`+evs.map(e=>{const t=typeOf(e.type);return `<div class="row">
+      <span class="dot" style="background:${esc(t.color)};width:10px;height:10px"></span>
+      <div class="main"><b>${esc(t.emoji)} ${esc(e.text||t.name)}</b><small>${esc(t.name)}${e.time?' · '+esc(e.time):''}</small></div>
+      <button class="mini" data-a="edit" data-id="${esc(e.id)}">Editar</button>
+      <button class="mini danger" data-a="del" data-id="${esc(e.id)}">Borrar</button></div>`;}).join('')+`</div>`;
+  }else h+=`<p class="sub">Nada anotado este día.</p>`;
+  h+=`<div class="lbl">${ed?'Editar evento':'Agregar'}</div>
+    <div class="types">${types.map(t=>`<button class="tpill ${t.id===sel?'sel':''}" data-a="type" data-t="${esc(t.id)}" style="${t.id===sel?`background:${esc(t.color)};border-color:${esc(t.color)}`:''}">${esc(t.emoji)} ${esc(t.name)}</button>`).join('')}</div>
+    <div class="two" style="margin-top:10px">
+      <input id="fText" class="field" placeholder="Detalle (opcional): lugar, tema…" value="${ed?esc(ed.text||''):''}" style="flex:2.2">
+      <input id="fTime" class="field" type="time" value="${ed?esc(ed.time||''):''}" style="flex:1">
+    </div>
+    <button class="primary" data-a="save">${ed?'Guardar cambios':'Agregar'}</button>
+    ${ed?'<button class="ghost" data-a="cancel">Cancelar edición</button>':''}`;
+  const sh=$('#sheet'); sh.innerHTML=h;
+  sh.querySelector('#fText').addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault();saveEvent(ds);} });
+  sh.onclick=e=>{
+    const b=e.target.closest('[data-a]'); if(!b) return; const a=b.dataset.a;
+    if(a==='close') return closeSheet();
+    if(a==='type'){
+      const keepT=$('#fText').value, keepH=$('#fTime').value;
+      formType=b.dataset.t; refreshSheet();
+      $('#fText').value=keepT; $('#fTime').value=keepH; return;
+    }
+    if(a==='save') return saveEvent(ds);
+    if(a==='cancel'){editId=null;return refreshSheet();}
+    if(a==='edit'){editId=b.dataset.id;const x=evs.find(z=>z.id===editId);if(x)formType=x.type;return refreshSheet();}
+    if(a==='del'){
+      if(!twoTap('del'+b.dataset.id,b)) return;
+      const evm=ensureMonth(ds.slice(0,7)); delete evm[b.dataset.id];
+      if(editId===b.dataset.id) editId=null;
+      armed=null; commit(['m-'+ds.slice(0,7)]); refreshSheet();
+    }
+  };
+}
+function saveEvent(ds){
+  const text=$('#fText').value.trim().slice(0,80), time=$('#fTime').value||'';
+  const mk=ds.slice(0,7), evm=ensureMonth(mk);
+  if(editId&&evm[editId]){
+    evm[editId]={...evm[editId],type:formType,text,time};
+    editId=null;
+  }else{
+    const id=uid(); evm[id]={id,date:ds,type:formType,text,time};
+  }
+  lastType=formType;
+  commit(['m-'+mk]); refreshSheet();
+}
+
+/* rotations */
+let rotEdit=null, rotColor=0;
+function rotSheet(){
+  const list=[...state.rotations].sort((a,b)=>a.start.localeCompare(b.start));
+  const ed=rotEdit?state.rotations.find(r=>r.id===rotEdit):null;
+  if(!ed&&rotEdit) rotEdit=null;
+  const firstOfView=viewY+'-'+pad(viewM+1)+'-01';
+  let h=head('Rotaciones');
+  h+=`<p class="sub">Pintan el fondo de los días y ponen el nombre chiquito en la esquina.</p>`;
+  if(list.length){
+    h+='<div>'+list.map(r=>`<div class="row">
+      <span class="sw" style="background:${esc(r.bg)};width:26px;height:26px;flex:none"></span>
+      <div class="main"><b>${esc(r.name)}</b><small>${fmtShort(r.start)} → ${fmtShort(r.end)} ${r.end.slice(0,4)}</small></div>
+      <button class="mini" data-a="redit" data-id="${esc(r.id)}">Editar</button>
+      <button class="mini danger" data-a="rdel" data-id="${esc(r.id)}">Borrar</button></div>`).join('')+'</div>';
+  }
+  const ci=ed?Math.max(0,ROT_COLORS.findIndex(c=>c.bg===ed.bg)):rotColor;
+  h+=`<div class="lbl">${ed?'Editar rotación':'Nueva rotación'}</div>
+    <input id="rName" class="field" placeholder="Nombre (ej. Dermato, Medicina HCSBA)" value="${ed?esc(ed.name):''}" maxlength="40">
+    <div class="lbl">Color</div>
+    <div class="swatches">${ROT_COLORS.map((c,i)=>`<button class="sw ${i===ci?'sel':''}" data-a="rcol" data-i="${i}" style="background:${c.bg}"></button>`).join('')}</div>
+    <div class="two" style="margin-top:12px">
+      <div><div class="lbl" style="margin-top:0">Desde</div><input id="rStart" class="field" type="date" value="${ed?ed.start:firstOfView}"></div>
+      <div><div class="lbl" style="margin-top:0">Hasta</div><input id="rEnd" class="field" type="date" value="${ed?ed.end:''}"></div>
+    </div>
+    <div class="err" id="rErr"></div>
+    <button class="primary" data-a="rsave">${ed?'Guardar cambios':'Agregar rotación'}</button>
+    ${ed?'<button class="ghost" data-a="rcancel">Cancelar edición</button>':''}`;
+  const sh=$('#sheet'); sh.innerHTML=h; rotColor=ci;
+  sh.onclick=e=>{
+    const b=e.target.closest('[data-a]'); if(!b) return; const a=b.dataset.a;
+    if(a==='close') return closeSheet();
+    if(a==='rcol'){ rotColor=+b.dataset.i; sh.querySelectorAll('.swatches .sw').forEach(x=>x.classList.toggle('sel',x===b)); return; }
+    if(a==='redit'){ rotEdit=b.dataset.id; return refreshSheet(); }
+    if(a==='rcancel'){ rotEdit=null; return refreshSheet(); }
+    if(a==='rdel'){
+      if(!twoTap('r'+b.dataset.id,b)) return;
+      state.rotations=state.rotations.filter(r=>r.id!==b.dataset.id);
+      if(rotEdit===b.dataset.id) rotEdit=null;
+      armed=null; commit(['rotaciones']); return refreshSheet();
+    }
+    if(a==='rsave'){
+      const name=$('#rName').value.trim(), s=$('#rStart').value, en=$('#rEnd').value;
+      const err=$('#rErr');
+      if(!name){err.textContent='Ponle un nombre.';return;}
+      if(!s||!en){err.textContent='Elige las fechas de inicio y término.';return;}
+      if(en<s){err.textContent='La fecha de término es antes del inicio.';return;}
+      const c=ROT_COLORS[rotColor]||ROT_COLORS[0];
+      if(ed){ Object.assign(ed,{name,start:s,end:en,bg:c.bg,fg:c.fg}); rotEdit=null; }
+      else { state.rotations.push({id:uid(),name,start:s,end:en,bg:c.bg,fg:c.fg}); rotColor=(rotColor+1)%ROT_COLORS.length; }
+      const sd=parse(s); viewY=sd.getFullYear(); viewM=sd.getMonth();
+      commit(['rotaciones']); refreshSheet();
+    }
+  };
+}
+
+/* brush */
+function brushSheet(){
+  const types=getTypes();
+  let h=head('Pincel');
+  h+=`<p class="sub">Elige un tipo y después toca los días en el calendario para ponerlo (o quitarlo si ya está). Ideal para anotar todos los turnos del mes de una vez.</p>`;
+  h+=`<div class="types">${types.map(t=>`<button class="tpill" data-a="pick" data-t="${esc(t.id)}">${esc(t.emoji)} ${esc(t.name)}</button>`).join('')}</div>`;
+  const sh=$('#sheet'); sh.innerHTML=h;
+  sh.onclick=e=>{
+    const b=e.target.closest('[data-a]'); if(!b) return;
+    if(b.dataset.a==='close') return closeSheet();
+    if(b.dataset.a==='pick'){ brushType=b.dataset.t; closeSheet(); updateBrushBar(); }
+  };
+}
+function updateBrushBar(){
+  const bar=$('#brushBar');
+  if(!brushType){bar.classList.add('hidden');$('#bBrush').classList.remove('on');return;}
+  const t=typeOf(brushType);
+  bar.style.background=t.color;
+  bar.innerHTML=`<span>🖌️ ${esc(t.emoji)} ${esc(t.name)}: toca los días para poner o quitar</span><button id="brushDone">Listo</button>`;
+  bar.classList.remove('hidden'); $('#bBrush').classList.add('on');
+  $('#brushDone').onclick=()=>{brushType=null;updateBrushBar();};
+}
+function brushDay(ds){
+  const mk=ds.slice(0,7), evm=ensureMonth(mk);
+  const hit=eventsOn(ds).filter(e=>e.type===brushType&&!e.text&&!e.time).pop();
+  if(hit) delete evm[hit.id];
+  else { const id=uid(); evm[id]={id,date:ds,type:brushType,text:'',time:''}; }
+  commit(['m-'+mk]);
+}
+
+/* more: types + backup */
+let draftTypes=null, importData=null;
+function moreSheet(){
+  if(!draftTypes) draftTypes=JSON.parse(JSON.stringify(getTypes()));
+  let h=head('Más');
+  h+=`<div class="lbl" style="margin-top:0">Tipos de evento</div><div id="tlist">`+draftTypes.map((t,i)=>`
+    <div class="trow" data-i="${i}">
+      <input class="emo" data-f="emoji" value="${esc(t.emoji)}" maxlength="4">
+      <input class="nm" data-f="name" value="${esc(t.name)}" maxlength="20">
+      <button class="mini danger" data-a="tdel" data-i="${i}">Quitar</button>
+      <div class="swatches">${EV_COLORS.map(c=>`<button class="sw ${c===t.color?'sel':''}" data-a="tcol" data-i="${i}" data-c="${c}" style="background:${c}"></button>`).join('')}</div>
+    </div>`).join('')+`</div>
+    <button class="ghost" data-a="tadd">＋ Agregar tipo</button>
+    <button class="primary" data-a="tsave">Guardar tipos</button>
+    <div class="lbl" style="margin-top:26px">Respaldo</div>
+    <p class="hint">Todo queda guardado en este dispositivo y funciona sin internet. Descarga un respaldo de vez en cuando (por ejemplo, al terminar cada rotación) y guárdalo en iCloud Drive o Google Drive. ${lastBackup()?"Último respaldo: "+new Date(lastBackup()).toLocaleDateString("es-CL")+".":"<b>Todavía no has descargado ningún respaldo.</b>"}</p>
+    <button class="ghost" data-a="exp">⬇️ Descargar respaldo</button>
+    <button class="ghost" data-a="copy">📋 Copiar respaldo</button>
+    <label class="ghost" style="display:flex;align-items:center;justify-content:center;cursor:pointer">📂 Restaurar desde archivo<input id="impFile" type="file" accept=".json,application/json" style="display:none"></label>
+    <div id="impBox"></div>
+    <div id="dumpBox"></div>`;
+  const sh=$('#sheet'); sh.innerHTML=h;
+  sh.querySelectorAll('.trow input').forEach(inp=>inp.addEventListener('input',()=>{
+    const i=+inp.closest('.trow').dataset.i; draftTypes[i][inp.dataset.f]=inp.value;
+  }));
+  $('#impFile').addEventListener('change',onImportFile);
+  renderImportBox();
+  sh.onclick=async e=>{
+    const b=e.target.closest('[data-a]'); if(!b) return; const a=b.dataset.a;
+    if(a==='close'){draftTypes=null;return closeSheet();}
+    if(a==='tcol'){ draftTypes[+b.dataset.i].color=b.dataset.c; b.parentElement.querySelectorAll('.sw').forEach(x=>x.classList.toggle('sel',x===b)); return; }
+    if(a==='tadd'){ draftTypes.push({id:uid(),name:'Nuevo',emoji:'⭐',color:EV_COLORS[draftTypes.length%EV_COLORS.length]}); return refreshSheet(); }
+    if(a==='tdel'){
+      if(draftTypes.length<=1){toast('Tiene que quedar al menos un tipo.');return;}
+      if(!twoTap('t'+b.dataset.i,b)) return;
+      draftTypes.splice(+b.dataset.i,1); armed=null; return refreshSheet();
+    }
+    if(a==='tsave'){
+      const clean=draftTypes.map(t=>({id:t.id,name:(t.name||'').trim()||'Evento',emoji:(t.emoji||'').trim()||'•',color:t.color}));
+      state.types=clean; draftTypes=null;
+      if(brushType&&!clean.find(t=>t.id===brushType)){brushType=null;}
+      updateBrushBar();
+      commit(['tipos']); toast('Tipos guardados'); return refreshSheet();
+    }
+    if(a==='exp') return doExport();
+    if(a==='copy') return doCopy();
+    if(a==='impyes') return doImport();
+    if(a==='impno'){ importData=null; return renderImportBox(); }
+  };
+}
+function backupJson(){
+  return JSON.stringify({app:'calendario-internado',version:1,exportado:new Date().toISOString(),rotations:state.rotations,types:getTypes(),months:state.months},null,1);
+}
+async function doExport(){
+  const name='calendario-respaldo-'+ymd(new Date())+'.json';
+  const txt=backupJson();
+  const mark=()=>{try{localStorage.setItem(BK,new Date().toISOString());}catch(e){} refreshSheet();};
+  try{
+    const file=new File([txt],name,{type:'application/json'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      await navigator.share({files:[file],title:'Respaldo calendario'});
+      mark(); toast('Respaldo listo'); return;
+    }
+  }catch(e){ if(e&&e.name==='AbortError') return; }
+  try{
+    const url=URL.createObjectURL(new Blob([txt],{type:'application/json'}));
+    const a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),4000);
+    mark(); toast('Respaldo descargado');
+  }catch(e){ toast('No se pudo descargar; usa “Copiar respaldo”.'); }
+}
+async function doCopy(){
+  const txt=backupJson();
+  try{ await navigator.clipboard.writeText(txt); try{localStorage.setItem(BK,new Date().toISOString());}catch(_){} toast('Respaldo copiado. Pégalo en una nota para guardarlo.'); }
+  catch(e){
+    $('#dumpBox').innerHTML='<p class="hint">Selecciona todo y cópialo:</p><textarea class="dump" readonly></textarea>';
+    const ta=$('#dumpBox textarea'); ta.value=txt; ta.focus(); ta.select();
+  }
+}
+function onImportFile(ev){
+  const f=ev.target.files&&ev.target.files[0]; if(!f) return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    try{
+      const d=JSON.parse(rd.result);
+      if(!d||d.app!=='calendario-internado'||!Array.isArray(d.rotations)||typeof d.months!=='object') throw 0;
+      importData=d;
+    }catch(e){ importData=null; toast('Ese archivo no es un respaldo de este calendario.'); }
+    renderImportBox();
+  };
+  rd.readAsText(f);
+  ev.target.value='';
+}
+function renderImportBox(){
+  const box=$('#impBox'); if(!box) return;
+  if(!importData){box.innerHTML='';return;}
+  const n=Object.values(importData.months||{}).reduce((s,m)=>s+Object.keys((m&&m.events)||{}).length,0);
+  const fecha=importData.exportado?new Date(importData.exportado).toLocaleDateString('es-CL'):'?';
+  box.innerHTML=`<p class="hint" style="color:var(--ink)">Respaldo del ${esc(fecha)}: ${importData.rotations.length} rotaciones y ${n} eventos. Esto <b>reemplaza</b> todo lo que hay ahora en el calendario.</p>
+    <div class="two"><button class="ghost" data-a="impno">Cancelar</button><button class="primary" style="margin-top:8px" data-a="impyes">Restaurar</button></div>`;
+}
+function doImport(){
+  const d=importData; if(!d) return;
+  const keys=new Set(['rotaciones','tipos']);
+  Object.keys(state.months).forEach(mk=>keys.add('m-'+mk));
+  const months={};
+  for(const mk in d.months){ if(/^\d{4}-\d{2}$/.test(mk)){ months[mk]={events:(d.months[mk]&&d.months[mk].events)||{}}; keys.add('m-'+mk); } }
+  Object.keys(state.months).forEach(mk=>{ if(!months[mk]) months[mk]={events:{}}; });
+  state={rotations:d.rotations,types:Array.isArray(d.types)&&d.types.length?d.types:null,months};
+  importData=null; draftTypes=null;
+  commit([...keys]); toast('Calendario restaurado'); closeSheet();
+}
+
+/* ---------- misc ---------- */
+let toastT=null;
+function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.remove('hidden');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.add('hidden'),2800);}
+function shiftMonth(n){viewM+=n; if(viewM<0){viewM=11;viewY--;} if(viewM>11){viewM=0;viewY++;} render();}
+$('#prev').onclick=()=>shiftMonth(-1);
+$('#next').onclick=()=>shiftMonth(1);
+$('#todayBtn').onclick=()=>{const n=new Date();viewY=n.getFullYear();viewM=n.getMonth();render();};
+$('#bRot').onclick=()=>{rotEdit=null;openSheet('rot');};
+$('#bBrush').onclick=()=>{ if(brushType){brushType=null;updateBrushBar();} else openSheet('brush'); };
+$('#bMore').onclick=()=>{draftTypes=null;openSheet('more');};
+$('#grid').addEventListener('click',e=>{
+  const c=e.target.closest('.cell'); if(!c||swiped) return;
+  const ds=c.dataset.d;
+  if(brushType) return brushDay(ds);
+  editId=null; openSheet('day',ds);
+});
+$('#up').addEventListener('click',e=>{const r=e.target.closest('.uprow'); if(r){editId=null;openSheet('day',r.dataset.d);}});
+let sx=0,sy=0,swiped=false;
+$('#grid').addEventListener('touchstart',e=>{const t=e.touches[0];sx=t.clientX;sy=t.clientY;swiped=false;},{passive:true});
+$('#grid').addEventListener('touchend',e=>{
+  const t=e.changedTouches[0],dx=t.clientX-sx,dy=t.clientY-sy;
+  if(Math.abs(dx)>60&&Math.abs(dy)<45){swiped=true;shiftMonth(dx<0?1:-1);setTimeout(()=>swiped=false,350);}
+},{passive:true});
+let rt=null; window.addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(render,150);});
+
+render(); setStatus();
+try{ if(navigator.storage&&navigator.storage.persist) navigator.storage.persist(); }catch(e){}
+if('serviceWorker' in navigator){ window.addEventListener('load',()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); }); }
+})();
+</script>
+</body>
+</html>

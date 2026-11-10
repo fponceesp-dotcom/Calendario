@@ -140,6 +140,7 @@
 <div id="overlay" class="overlay hidden"><div class="sheet" id="sheet"></div></div>
 <div id="toast" class="toast hidden"></div>
 
+<script src="sync.bundle.js"></script>
 <script>
 (function(){
 'use strict';
@@ -203,16 +204,133 @@ function rotationOn(ds){
 }
 function ensureMonth(mk){ if(!state.months[mk]||!state.months[mk].events) state.months[mk]={events:{}}; return state.months[mk].events; }
 
-/* ---------- guardado en el dispositivo ---------- */
-let storageOk=true;
+/* ---------- guardado + sincronización ---------- */
+// Configuración de Firebase (se completa una sola vez). Si queda en null, todo se guarda solo en el dispositivo.
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyApul3VYg_g12Bxq-z4rlwYlA8WUO8xfp4",
+  authDomain: "calendario-internado.firebaseapp.com",
+  projectId: "calendario-internado",
+  storageBucket: "calendario-internado.firebasestorage.app",
+  messagingSenderId: "674602700633",
+  appId: "1:674602700633:web:b677fca000f0c1eba6c648"
+};
+let storageOk=true, syncUser=null, syncPending=false, syncFromCache=true, syncErr=null, syncMsg='';
 const BK='calInternado.ultimoRespaldo';
-function commit(){ saveLocal(); render(); setStatus(); }
-function setStatus(){
-  const el=$('#status');
-  el.textContent=storageOk?'✓ Guardado en este dispositivo':'⚠️ No se pudo guardar';
-  el.classList.toggle('warn',!storageOk);
+const MERGED='calInternado.unido.';
+function bodyFor(k){
+  if(k==='rotaciones') return {list:state.rotations};
+  if(k==='tipos') return {list:getTypes()};
+  if(k.startsWith('m-')) return {events:monthEvents(k.slice(2))};
+  return {};
 }
+function pushKey(k){
+  if(!syncUser||!window.CalSync) return;
+  window.CalSync.write(k,JSON.parse(JSON.stringify(bodyFor(k)))).catch(e=>{
+    syncErr=(e&&e.code)||'error'; setStatus();
+    toast('No se pudo sincronizar. Quedó guardado en este dispositivo.');
+  });
+}
+function commit(keys){ saveLocal(); render(); (keys||[]).forEach(pushKey); setStatus(); }
+function setStatus(){
+  const el=$('#status'); let t, warn=false;
+  if(!storageOk){t='⚠️ No se pudo guardar';warn=true;}
+  else if(!syncUser) t='✓ Guardado en este dispositivo';
+  else if(syncErr){t='⚠️ Error al sincronizar';warn=true;}
+  else if(!navigator.onLine){t='Sin conexión · se sincroniza después';warn=true;}
+  else if(syncPending||syncFromCache) t='Sincronizando…';
+  else t='✓ Sincronizado';
+  el.textContent=t; el.classList.toggle('warn',warn);
+}
+window.addEventListener('online',setStatus); window.addEventListener('offline',setStatus);
 function lastBackup(){ try{return localStorage.getItem(BK);}catch(e){return null;} }
+function stateFromDocs(docs){
+  const s={rotations:[],types:null,months:{}};
+  for(const id in docs){
+    const d=docs[id]||{};
+    if(id==='rotaciones') s.rotations=Array.isArray(d.list)?d.list:[];
+    else if(id==='tipos') s.types=Array.isArray(d.list)&&d.list.length?d.list:null;
+    else if(id.startsWith('m-')) s.months[id.slice(2)]={events:d.events&&typeof d.events==='object'?d.events:{}};
+  }
+  return JSON.parse(JSON.stringify(s));
+}
+// La primera vez que un dispositivo entra a la cuenta, junta lo que tenía anotado con lo que ya está en la nube.
+function mergeStates(c,l){
+  const changed=new Set();
+  const rot=[...c.rotations], rid=new Set(rot.map(r=>r.id));
+  (l.rotations||[]).forEach(r=>{ if(!rid.has(r.id)){rot.push(r);changed.add('rotaciones');} });
+  let types=c.types;
+  if(!types&&l.types){types=l.types;changed.add('tipos');}
+  else if(types&&l.types){const tid=new Set(types.map(t=>t.id));const extra=l.types.filter(t=>!tid.has(t.id));if(extra.length){types=[...types,...extra];changed.add('tipos');}}
+  const months=JSON.parse(JSON.stringify(c.months));
+  for(const mk in (l.months||{})){
+    const le=(l.months[mk]&&l.months[mk].events)||{};
+    for(const id in le){ if(!months[mk]) months[mk]={events:{}}; if(!months[mk].events[id]){months[mk].events[id]=le[id];changed.add('m-'+mk);} }
+  }
+  return {state:{rotations:rot,types,months},changed:[...changed]};
+}
+function wasMerged(u){try{return localStorage.getItem(MERGED+u)==='1';}catch(e){return false;}}
+function setMerged(u){try{localStorage.setItem(MERGED+u,'1');}catch(e){}}
+function applyRemote(next){
+  const before=JSON.stringify(state);
+  state=next; saveLocal();
+  if(JSON.stringify(state)!==before){ render(); keepInputs(refreshSheet); }
+}
+function onSyncData(docs,meta){
+  syncErr=null; syncPending=meta.pending; syncFromCache=meta.fromCache;
+  const u=syncUser&&syncUser.uid;
+  if(u&&!wasMerged(u)){
+    if(meta.fromCache){ setStatus(); return; }   // espera la respuesta de la nube antes de juntar
+    const m=mergeStates(stateFromDocs(docs),state);
+    setMerged(u);
+    applyRemote(m.state);
+    m.changed.forEach(pushKey);
+    setStatus(); return;
+  }
+  if(meta.fromCache&&!Object.keys(docs).length){ setStatus(); return; }
+  applyRemote(stateFromDocs(docs));
+  setStatus();
+}
+function onSyncUser(u){
+  syncUser=u; syncPending=false; syncFromCache=true; syncErr=null;
+  setStatus(); if(sheetKind==='more') keepInputs(refreshSheet);
+}
+function keepInputs(fn){
+  const sh=$('#sheet'), vals={}, act=document.activeElement&&document.activeElement.id;
+  sh.querySelectorAll('input[id]').forEach(i=>{ if(i.type!=='file') vals[i.id]=i.value; });
+  fn();
+  for(const id in vals){ const i=document.getElementById(id); if(i) i.value=vals[id]; }
+  if(act){ const i=document.getElementById(act); if(i&&i.focus) i.focus(); }
+}
+const AUTH_ERR={
+  'auth/invalid-credential':'Correo o contraseña incorrectos.','auth/wrong-password':'Correo o contraseña incorrectos.',
+  'auth/user-not-found':'No existe una cuenta con ese correo.','auth/email-already-in-use':'Ya existe una cuenta con ese correo: usa “Entrar”.',
+  'auth/weak-password':'La contraseña debe tener al menos 6 caracteres.','auth/invalid-email':'Ese correo no es válido.',
+  'auth/missing-password':'Escribe la contraseña.','auth/network-request-failed':'Necesitas internet para entrar la primera vez.',
+  'auth/too-many-requests':'Demasiados intentos. Espera un rato y vuelve a intentar.'
+};
+function syncSection(){
+  if(!FIREBASE_CONFIG||!window.CalSync) return '';
+  if(syncUser) return `<div class="lbl" style="margin-top:0">Sincronización</div>
+    <p class="hint" style="color:var(--ink)">✓ Sincronizando con <b>${esc(syncUser.email)}</b>. Lo que anotes aparece en todos los dispositivos donde entres con esta cuenta, y funciona sin internet (se sincroniza cuando vuelve la conexión).</p>
+    <button class="ghost" data-a="slogout">Cerrar sesión</button>`;
+  return `<div class="lbl" style="margin-top:0">Sincronizar entre dispositivos</div>
+    <p class="hint">Entra con el mismo correo y contraseña en el iPad y en el celular para ver lo mismo en los dos.</p>
+    <input id="sEmail" class="field" type="email" autocomplete="username" autocapitalize="off" placeholder="Correo">
+    <input id="sPass" class="field" type="password" autocomplete="current-password" placeholder="Contraseña (mínimo 6 caracteres)" style="margin-top:8px">
+    <div class="err" id="sErr">${esc(syncMsg)}</div>
+    <div class="two"><button class="ghost" data-a="ssignup">Crear cuenta</button><button class="primary" style="margin-top:8px" data-a="slogin">Entrar</button></div>
+    <button class="ghost" data-a="sreset" style="border:0;color:var(--muted);font-size:14px">Olvidé mi contraseña</button>`;
+}
+async function syncAction(a,b){
+  const em=$('#sEmail')?$('#sEmail').value.trim():'', pw=$('#sPass')?$('#sPass').value:'';
+  const show=m=>{syncMsg=m; const e=$('#sErr'); if(e) e.textContent=m;};
+  try{
+    if(a==='slogin'){ show(''); b.textContent='Entrando…'; await window.CalSync.login(em,pw); syncMsg=''; toast('Listo, sincronizando'); }
+    else if(a==='ssignup'){ show(''); b.textContent='Creando…'; await window.CalSync.signup(em,pw); syncMsg=''; toast('Cuenta creada, sincronizando'); }
+    else if(a==='sreset'){ if(!em){show('Escribe tu correo arriba y vuelve a tocar “Olvidé mi contraseña”.');return;} await window.CalSync.reset(em); show('Te mandamos un correo para cambiar la contraseña (revisa spam).'); }
+    else if(a==='slogout'){ if(!twoTap('logout',b)) return; armed=null; await window.CalSync.logout(); toast('Sesión cerrada. Lo anotado sigue en este dispositivo.'); }
+  }catch(e){ show(AUTH_ERR[e&&e.code]||('No se pudo ('+((e&&e.code)||'error')+').')); keepInputs(refreshSheet); }
+}
 
 /* ---------- calendar render ---------- */
 function render(){
@@ -427,8 +545,8 @@ function brushDay(ds){
 let draftTypes=null, importData=null;
 function moreSheet(){
   if(!draftTypes) draftTypes=JSON.parse(JSON.stringify(getTypes()));
-  let h=head('Más');
-  h+=`<div class="lbl" style="margin-top:0">Tipos de evento</div><div id="tlist">`+draftTypes.map((t,i)=>`
+  let h=head('Más')+syncSection();
+  h+=`<div class="lbl" style="${FIREBASE_CONFIG&&window.CalSync?'margin-top:26px':'margin-top:0'}">Tipos de evento</div><div id="tlist">`+draftTypes.map((t,i)=>`
     <div class="trow" data-i="${i}">
       <input class="emo" data-f="emoji" value="${esc(t.emoji)}" maxlength="4">
       <input class="nm" data-f="name" value="${esc(t.name)}" maxlength="20">
@@ -438,7 +556,7 @@ function moreSheet(){
     <button class="ghost" data-a="tadd">＋ Agregar tipo</button>
     <button class="primary" data-a="tsave">Guardar tipos</button>
     <div class="lbl" style="margin-top:26px">Respaldo</div>
-    <p class="hint">Todo queda guardado en este dispositivo y funciona sin internet. Descarga un respaldo de vez en cuando (por ejemplo, al terminar cada rotación) y guárdalo en iCloud Drive o Google Drive. ${lastBackup()?"Último respaldo: "+new Date(lastBackup()).toLocaleDateString("es-CL")+".":"<b>Todavía no has descargado ningún respaldo.</b>"}</p>
+    <p class="hint">Descarga un respaldo de vez en cuando (por ejemplo, al terminar cada rotación) y guárdalo en iCloud Drive o Google Drive. ${lastBackup()?"Último respaldo: "+new Date(lastBackup()).toLocaleDateString("es-CL")+".":"<b>Todavía no has descargado ningún respaldo.</b>"}</p>
     <button class="ghost" data-a="exp">⬇️ Descargar respaldo</button>
     <button class="ghost" data-a="copy">📋 Copiar respaldo</button>
     <label class="ghost" style="display:flex;align-items:center;justify-content:center;cursor:pointer">📂 Restaurar desde archivo<input id="impFile" type="file" accept=".json,application/json" style="display:none"></label>
@@ -467,6 +585,7 @@ function moreSheet(){
       updateBrushBar();
       commit(['tipos']); toast('Tipos guardados'); return refreshSheet();
     }
+    if(a[0]==='s'&&['slogin','ssignup','sreset','slogout'].includes(a)) return syncAction(a,b);
     if(a==='exp') return doExport();
     if(a==='copy') return doCopy();
     if(a==='impyes') return doImport();
@@ -562,6 +681,10 @@ $('#grid').addEventListener('touchend',e=>{
 let rt=null; window.addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(render,150);});
 
 render(); setStatus();
+if(FIREBASE_CONFIG&&window.CalSync){
+  try{ window.CalSync.init(FIREBASE_CONFIG,{onUser:onSyncUser,onData:onSyncData,onError:c=>{syncErr=c;setStatus();}}); }
+  catch(e){ console.error(e); }
+}
 try{ if(navigator.storage&&navigator.storage.persist) navigator.storage.persist(); }catch(e){}
 if('serviceWorker' in navigator){ window.addEventListener('load',()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); }); }
 })();
